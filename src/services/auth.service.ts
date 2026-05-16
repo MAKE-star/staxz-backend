@@ -8,7 +8,8 @@ import { SmsService } from './sms.service';
 import { UnauthorizedError, AppError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
-const OTP_PREFIX = 'otp:';
+const OTP_PREFIX      = 'otp:';
+const PIN_ID_PREFIX   = 'pin:';
 const REFRESH_TOKEN_PREFIX = 'rt:';
 const OTP_RATE_PREFIX = 'otp_rate:';
 
@@ -26,20 +27,32 @@ export class AuthService {
       throw new AppError('Too many OTP requests. Try again in an hour.', 429, 'RATE_LIMITED');
     }
 
-    const code = generateOtp();
-    const record: OtpRecord = { code, attempts: 0, expiresAt: Date.now() + config.otp.ttlSeconds * 1000 };
+    if (!config.termii.apiKey) {
+      // Dev mode — generate and store our own OTP
+      const code = generateOtp();
+      const record: OtpRecord = {
+        code,
+        attempts: 0,
+        expiresAt: Date.now() + config.otp.ttlSeconds * 1000,
+      };
+      await redis.setex(`${OTP_PREFIX}${phone}`, config.otp.ttlSeconds, JSON.stringify(record));
+      logger.info({ phone, code }, '🔑 DEV OTP (Termii not configured)');
+      return;
+    }
 
-    await redis.setex(
-      `${OTP_PREFIX}${phone}`,
-      config.otp.ttlSeconds,
-      JSON.stringify(record)
-    );
-
-    // In production: send via Termii. In dev: log it.
-    if (config.isProduction) {
-      await SmsService.sendOtp(phone, code);
-    } else {
-      logger.info({ phone, code }, '🔑 DEV OTP (not sent in production)');
+    // Production — use Termii Token API
+    try {
+      const pinId = await SmsService.sendToken(phone);
+      // Store pinId in Redis so we can verify later
+      await redis.setex(`${PIN_ID_PREFIX}${phone}`, config.otp.ttlSeconds, pinId);
+      logger.info({ phone, pinId }, '✅ Termii token sent');
+    } catch (err) {
+      logger.error({ phone, err }, '❌ Termii sendToken failed — falling back to dev OTP');
+      // Fallback: store our own OTP in Redis
+      const code = generateOtp();
+      const record: OtpRecord = { code, attempts: 0, expiresAt: Date.now() + config.otp.ttlSeconds * 1000 };
+      await redis.setex(`${OTP_PREFIX}${phone}`, config.otp.ttlSeconds, JSON.stringify(record));
+      logger.info({ phone, code }, '🔑 Fallback OTP stored in Redis');
     }
   }
 
@@ -49,26 +62,53 @@ export class AuthService {
     code: string,
     role: UserRole = UserRole.HIRER
   ): Promise<{ accessToken: string; refreshToken: string; isNewUser: boolean }> {
-    const key = `${OTP_PREFIX}${phone}`;
-    const raw = await redis.get(key);
 
-    if (!raw) throw new UnauthorizedError('OTP expired or not found');
+    let verified = false;
 
-    const record: OtpRecord = JSON.parse(raw);
+    // Check if we have a Termii pinId for this phone
+    const pinId = await redis.get(`${PIN_ID_PREFIX}${phone}`);
 
-    if (record.attempts >= config.otp.maxAttempts) {
+    if (pinId) {
+      // Verify via Termii
+      try {
+        verified = await SmsService.verifyToken(pinId, code);
+        if (verified) {
+          await redis.del(`${PIN_ID_PREFIX}${phone}`);
+        } else {
+          throw new UnauthorizedError('Invalid OTP');
+        }
+      } catch (err: any) {
+        if (err instanceof UnauthorizedError) throw err;
+        logger.error({ phone, err }, 'Termii verify failed — trying Redis fallback');
+        verified = false;
+      }
+    }
+
+    // Fallback: check our own Redis OTP
+    if (!verified) {
+      const key = `${OTP_PREFIX}${phone}`;
+      const raw = await redis.get(key);
+
+      if (!raw) throw new UnauthorizedError('OTP expired or not found');
+
+      const record: OtpRecord = JSON.parse(raw);
+
+      if (record.attempts >= config.otp.maxAttempts) {
+        await redis.del(key);
+        throw new UnauthorizedError('Too many failed attempts');
+      }
+
+      if (record.code !== code) {
+        record.attempts++;
+        await redis.setex(key, config.otp.ttlSeconds, JSON.stringify(record));
+        throw new UnauthorizedError('Invalid OTP');
+      }
+
       await redis.del(key);
-      throw new UnauthorizedError('Too many failed attempts');
+      verified = true;
     }
 
-    if (record.code !== code) {
-      record.attempts++;
-      await redis.setex(key, config.otp.ttlSeconds, JSON.stringify(record));
-      throw new UnauthorizedError('Invalid OTP');
-    }
-
-    await redis.del(key);
-
+    // OTP verified — find or create user
     const existingUser = await UserModel.findByPhone(phone);
     const user = existingUser ?? await UserModel.upsertByPhone(phone, role);
     const isNewUser = !existingUser;
@@ -80,9 +120,7 @@ export class AuthService {
     return { accessToken, refreshToken, isNewUser };
   }
 
-  static async refresh(
-    rawRefreshToken: string
-  ): Promise<{ accessToken: string }> {
+  static async refresh(rawRefreshToken: string): Promise<{ accessToken: string }> {
     const tokenHash = hashToken(rawRefreshToken);
     const key = `${REFRESH_TOKEN_PREFIX}${tokenHash}`;
     const userId = await redis.get(key);
@@ -105,11 +143,8 @@ export class AuthService {
     const accessToken = this.signAccessToken(userId, role, phone);
     const refreshToken = generateSecureToken();
     const tokenHash = hashToken(refreshToken);
-
-    // Store refresh token in Redis with TTL
-    const ttlSeconds = 30 * 24 * 60 * 60; // 30 days
+    const ttlSeconds = 30 * 24 * 60 * 60;
     await redis.setex(`${REFRESH_TOKEN_PREFIX}${tokenHash}`, ttlSeconds, userId);
-
     return { accessToken, refreshToken };
   }
 
