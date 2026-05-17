@@ -38,9 +38,10 @@ export const onboardProviderSchema = z.object({
     }),
     cac_number: z
       .string()
-      .regex(/^(RC|BN|IT|LP|LLP)-?\d{5,8}$/i, 'CAC format: RC-1234567 or BN-1234567')
-      .optional(),
+      .regex(/^(RC|BN|IT|LP|LLP)-?\d{5,9}$/i, 'CAC format: RC-1234567 or BN-9515166'),
+    state: z.string().min(2, 'State is required').max(50),
     location_text: z.string().min(3, 'Location area is required').max(200),
+    full_address: z.string().min(5, 'Full address is required').max(500).optional(),
     location_lat: z.number().min(4.2).max(13.9).optional(),
     location_lng: z.number().min(2.7).max(14.7).optional(),
 
@@ -51,6 +52,7 @@ export const onboardProviderSchema = z.object({
         'locs', 'relaxer', 'makeup', 'bridal_makeup', 'facials',
         'lashes', 'nails', 'pedicure', 'manicure', 'spa',
         'waxing', 'eyebrows', 'hair_treatment', 'natural_hair',
+        'natural', 'barber',
       ]))
       .min(1, 'Select at least one service category'),
     service_modes: z
@@ -74,11 +76,7 @@ export const onboardProviderSchema = z.object({
     bank_code: z.string().min(3).max(10),
 
     // ── Optional fields ─────────────────────────────────────────────────────
-    bio: z
-      .string()
-      .min(20, 'Bio must be at least 20 characters')
-      .max(500, 'Bio must be 500 characters or fewer')
-      .optional(),
+    bio: z.string().max(500).optional(),
     years_experience: z.number().int().min(0).max(50).optional(),
   }),
 });

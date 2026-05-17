@@ -47,6 +47,10 @@ export class ProviderModel {
       conditions.push(`$${idx++} = ANY(p.service_modes)`);
       values.push(mode);
     }
+    if (params.state) {
+      conditions.push(`p.state = $${idx++}`);
+      values.push(params.state);
+    }
 
     // GPS radius filter (using simple lat/lng distance — upgrade to PostGIS later)
     let distanceExpr = 'NULL::float AS distance_km';
@@ -112,14 +116,15 @@ export class ProviderModel {
     const { rows } = await executor.query<ProviderRow>(
       `INSERT INTO providers (
         user_id, business_name, business_type, cac_number,
-        whatsapp_number, location_text, location_lat, location_lng,
+        whatsapp_number, state, location_text, full_address, location_lat, location_lng,
         service_modes, base_fee_kobo, service_categories,
         bio, years_experience, bank_account_name, bank_account_number, bank_code
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       RETURNING *`,
       [
         data.user_id, data.business_name, data.business_type, data.cac_number,
-        data.whatsapp_number, data.location_text, data.location_lat, data.location_lng,
+        data.whatsapp_number, data.state, data.location_text, data.full_address,
+        data.location_lat, data.location_lng,
         data.service_modes, data.base_fee_kobo, data.service_categories,
         data.bio, data.years_experience, data.bank_account_name,
         data.bank_account_number, data.bank_code,

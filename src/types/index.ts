@@ -137,7 +137,9 @@ export interface ProviderRow {
   cac_number: string | null;
   cac_verified: boolean;
   whatsapp_number: string;
+  state: string | null;
   location_text: string | null;
+  full_address: string | null;
   location_lat: number | null;
   location_lng: number | null;
   service_modes: ServiceMode[];
@@ -271,6 +273,7 @@ export interface ProvidersQueryParams {
   radius?: number; // km
   category?: string;
   mode?: ServiceMode;
+  state?: string;
   sort?: 'rating' | 'distance' | 'price';
   page?: number;
   limit?: number;

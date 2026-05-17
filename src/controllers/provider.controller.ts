@@ -10,7 +10,7 @@ import { cloudinary } from '../config/cloudinary';
 
 export class ProviderController {
   static async list(req: Request, res: Response): Promise<void> {
-    const { lat, lng, radius, category, mode, sort, page = '1', limit = '20' } = req.query as Record<string, string>;
+    const { lat, lng, radius, category, mode, state, sort, page = '1', limit = '20' } = req.query as Record<string, string>;
 
     const result = await ProviderModel.list({
       lat: lat ? parseFloat(lat) : undefined,
@@ -18,6 +18,8 @@ export class ProviderController {
       radius: radius ? parseFloat(radius) : undefined,
       category,
       mode: mode as ServiceMode | undefined,
+      state,
+
       sort: sort as 'rating' | 'distance' | 'price' | undefined,
       page: parseInt(page, 10),
       limit: Math.min(parseInt(limit, 10), 50),
@@ -43,7 +45,7 @@ export class ProviderController {
 
     const {
       business_name, business_type, cac_number, whatsapp_number,
-      location_text, location_lat, location_lng, service_modes,
+      state, location_text, full_address, location_lat, location_lng, service_modes,
       base_fee_kobo, service_categories,
       bank_account_name, bank_account_number, bank_code,
       years_experience, bio,
@@ -79,7 +81,9 @@ export class ProviderController {
       business_type,
       cac_number: cac_number ?? null,
       whatsapp_number,
+      state: state ?? null,
       location_text: location_text ?? null,
+      full_address: full_address ?? null,
       location_lat: location_lat ?? null,
       location_lng: location_lng ?? null,
       service_modes,

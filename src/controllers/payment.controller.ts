@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Response, Request, NextFunction } from 'express';
 import { PaystackService } from '../services/paystack.service';
 import { BookingModel } from '../models/booking.model';
 import { BookingStatus, AuthenticatedRequest, UserRole } from '../types';
@@ -113,4 +113,29 @@ export class PaymentController {
 
     sendSuccess(res, null, 200, `Refund of ₦${(refundAmount / 100).toLocaleString('en-NG')} initiated`);
   }
+
+  static resolveAccount = async (req: Request<object, object, object, { account_number: string; bank_code: string }>, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { account_number, bank_code } = req.query;
+      if (!account_number || !bank_code) {
+        res.status(400).json({ success: false, error: 'account_number and bank_code are required' });
+        return;
+      }
+
+      const paystackRes = await fetch(
+        `https://api.paystack.co/bank/resolve?account_number=${account_number}&bank_code=${bank_code}`,
+        { headers: { Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}` } }
+      );
+      const data = await paystackRes.json() as any;
+
+      if (!paystackRes.ok || !data.status) {
+        res.status(422).json({ success: false, error: 'Could not resolve account' });
+        return;
+      }
+
+      res.json({ success: true, data: { account_name: data.data.account_name, account_number: data.data.account_number } });
+    } catch (err) {
+      next(err);
+    }
+  };
 }
