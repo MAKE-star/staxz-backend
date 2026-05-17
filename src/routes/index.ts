@@ -7,6 +7,8 @@ import adminRoutes from './admin.routes';
 import notificationRoutes from './notification.routes';
 import withdrawalRoutes from './withdrawal.routes';
 import savedRoutes from './saved.routes';
+import cacRoutes from './cac.routes';
+import paymentRoutes from './payment.routes';
 import { db } from '../config/database';
 import { redis } from '../config/redis';
 
@@ -34,5 +36,7 @@ router.use('/admin',         adminRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/withdrawals',   withdrawalRoutes);
 router.use('/saved',         savedRoutes);
+router.use('/cac',           cacRoutes);
+router.use('/payments',      paymentRoutes);
 
 export default router;

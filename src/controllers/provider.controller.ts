@@ -3,6 +3,7 @@ import { ProviderModel } from '../models/provider.model';
 import { ReviewModel } from '../models/review.model';
 import { UserModel } from '../models/user.model';
 import { ProviderService } from '../services/provider.service';
+import { CACService } from '../services/cac.service';
 import { AuthenticatedRequest, UserRole, ServiceMode } from '../types';
 import { sendSuccess, sendCreated, buildPagination } from '../utils/response';
 import { NotFoundError, ForbiddenError, ConflictError, AppError, ValidationError } from '../utils/errors';
@@ -72,6 +73,24 @@ export class ProviderController {
 
     if (!criteria.passed) {
       throw new ValidationError('Onboarding requirements not met', criteria.errors);
+    }
+
+    // ── CAC Verification ────────────────────────────────────────────────────
+    const cacResult = await CACService.verify(cac_number);
+
+    if (!cacResult.verified) {
+      throw new ValidationError('CAC verification failed', {
+        cac_number: [cacResult.error ?? 'CAC number could not be verified'],
+      });
+    }
+
+    if (cacResult.registeredName) {
+      const nameMatch = CACService.nameMatches(business_name, cacResult.registeredName);
+      if (!nameMatch) {
+        throw new ValidationError('Business name mismatch', {
+          business_name: [`Name does not match CAC records. Registered as: "${cacResult.registeredName}"`],
+        });
+      }
     }
 
     // ── Create provider record ───────────────────────────────────────────────
