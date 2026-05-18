@@ -14,6 +14,16 @@ import { redis } from '../config/redis';
 
 const router = Router();
 
+router.get('/debug/env', (_req, res) => {
+  res.json({
+    paystack_key_set: !!process.env.PAYSTACK_SECRET_KEY,
+    paystack_key_prefix: process.env.PAYSTACK_SECRET_KEY?.slice(0, 10) ?? 'NOT SET',
+    cloudinary_set: !!process.env.CLOUDINARY_API_KEY,
+    termii_set: !!process.env.TERMII_API_KEY,
+    node_env: process.env.NODE_ENV,
+  });
+});
+
 router.get('/health', async (_req, res) => {
   const [dbOk, redisOk] = await Promise.all([
     db.healthCheck(),
