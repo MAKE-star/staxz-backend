@@ -35,7 +35,7 @@ export class ProviderModel {
       sort = 'rating', page = 1, limit = 20,
     } = params;
 
-    const conditions: string[] = ['p.is_live = true'];
+    const conditions: string[] = ['p.is_flagged = false'];
     const values: unknown[] = [];
     let idx = 1;
 
@@ -48,8 +48,9 @@ export class ProviderModel {
       values.push(mode);
     }
     if (params.state) {
-      conditions.push(`p.state = $${idx++}`);
+      conditions.push(`(p.state ILIKE $${idx} OR p.state IS NULL)`);
       values.push(params.state);
+      idx++;
     }
 
     // GPS radius filter (using simple lat/lng distance — upgrade to PostGIS later)
