@@ -129,7 +129,13 @@ export class PaymentController {
       const data = await paystackRes.json() as any;
 
       if (!paystackRes.ok || !data.status) {
-        res.status(422).json({ success: false, error: 'Could not resolve account' });
+        // Paystack test mode doesn't support all banks
+        // Return a soft error so frontend can fall back to manual entry
+        res.status(422).json({
+          success: false,
+          error: 'Account resolution unavailable for this bank in test mode. Please enter your account name manually.',
+          fallback: true,
+        });
         return;
       }
 
