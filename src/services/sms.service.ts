@@ -14,55 +14,59 @@ interface VerifyTokenResponse {
 }
 
 export class SmsService {
-  /**
-   * Send OTP via Termii Token API.
-   * Returns pinId which must be stored and used to verify later.
-   */
   static async sendToken(phone: string): Promise<string> {
     if (!config.termii.apiKey) {
-      // Dev mode — return a fake pinId, actual code handled by Redis
       logger.warn({ phone }, 'Termii not configured — using dev mode');
       return 'dev-pin-id';
     }
 
-    // Strip + from phone for Termii (they want 234XXXXXXXXXX format)
+    // Strip + from phone (Termii wants 234XXXXXXXXXX)
     const termiiPhone = phone.startsWith('+') ? phone.slice(1) : phone;
 
-    const res = await fetch(`${config.termii.baseUrl}/api/sms/otp/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key:          config.termii.apiKey,
-        message_type:     'NUMERIC',
-        to:               termiiPhone,
-        from:             config.termii.senderId,
-        channel:          'dnd',
-        pin_attempts:     5,
-        pin_time_to_live: 5,
-        pin_length:       6,
-        pin_placeholder:  '< 000000 >',
-        message_text:     'Your Staxz verification code is < 000000 >. Valid for 5 minutes. Do not share.',
-        pin_type:         'NUMERIC',
-      }),
-    });
+    const channels = [
+      { channel: 'generic', from: 'N-Alert' },
+      { channel: 'dnd',     from: 'N-Alert' },
+    ];
 
-    const data = await res.json() as SendTokenResponse;
-    logger.info({ phone, data }, 'Termii send token response');
+    for (const { channel, from } of channels) {
+      try {
+        const res = await fetch(`${config.termii.baseUrl}/api/sms/otp/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key:          config.termii.apiKey,
+            message_type:     'NUMERIC',
+            to:               termiiPhone,
+            from,
+            channel,
+            pin_attempts:     5,
+            pin_time_to_live: 5,
+            pin_length:       6,
+            pin_placeholder:  '< 000000 >',
+            message_text:     'Your Staxz verification code is < 000000 >. Valid for 5 minutes. Do not share.',
+            pin_type:         'NUMERIC',
+          }),
+        });
 
-    if (!data.pinId) {
-      throw new Error(`Termii failed to send token: ${JSON.stringify(data)}`);
+        const data = await res.json() as SendTokenResponse;
+        logger.info({ phone, channel, data }, 'Termii send token response');
+
+        if (data.pinId) {
+          logger.info({ phone, channel }, '✅ OTP sent via Termii');
+          return data.pinId;
+        }
+
+        logger.warn({ phone, channel, data }, `Channel ${channel} failed, trying next`);
+      } catch (err) {
+        logger.warn({ phone, channel, err }, `Channel ${channel} threw error`);
+      }
     }
 
-    return data.pinId;
+    throw new Error('All Termii channels failed');
   }
 
-  /**
-   * Verify OTP via Termii Verify Token API.
-   * Returns true if verified, false if not.
-   */
   static async verifyToken(pinId: string, pin: string): Promise<boolean> {
     if (!config.termii.apiKey || pinId === 'dev-pin-id') {
-      // Dev mode — skip verification
       return true;
     }
 
