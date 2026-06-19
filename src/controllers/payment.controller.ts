@@ -126,7 +126,7 @@ export class PaymentController {
   static resolveAccount = async (
     req: Request<object, object, object, { account_number: string; bank_code: string }>,
     res: Response,
-    next: NextFunction
+    // next: NextFunction
   ): Promise<void> => {
     try {
       const { account_number, bank_code } = req.query;

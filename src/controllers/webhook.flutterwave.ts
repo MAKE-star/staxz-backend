@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { FlutterwaveService } from '../services/flutterwave.service';
+// import { FlutterwaveService } from '../services/flutterwave.service';
 import { BookingModel } from '../models/booking.model';
 import { BookingStatus } from '../types';
 import { db } from '../config/database';
@@ -21,7 +21,7 @@ export class FlutterwaveWebhookController {
     // Payment successful
     if (event.event === 'charge.completed' && event.data.status === 'successful') {
       const reference = event.data.tx_ref;
-      const amountNaira = event.data.amount;
+    //   const amountNaira = event.data.amount;
 
       // Find booking by reference
       const { rows } = await db.query(
