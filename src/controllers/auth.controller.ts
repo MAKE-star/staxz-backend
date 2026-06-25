@@ -17,8 +17,8 @@ const COOKIE_OPTIONS = {
 
 export class AuthController {
   static async requestOtp(req: Request, res: Response): Promise<void> {
-    const { phone } = req.body as { phone: string };
-    await AuthService.requestOtp(phone);
+    const { phone, mode } = req.body as { phone: string; mode?: string };
+    await AuthService.requestOtp(phone, mode);
     sendSuccess(res, null, 200, 'OTP sent successfully');
   }
 

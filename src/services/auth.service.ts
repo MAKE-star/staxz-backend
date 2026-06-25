@@ -15,7 +15,14 @@ const OTP_RATE_PREFIX = 'otp_rate:';
 
 export class AuthService {
   /** Send OTP — rate limited to 3/hour per phone number */
-  static async requestOtp(phone: string): Promise<void> {
+  static async requestOtp(phone: string, mode: string = 'signup'): Promise<void> {
+    // If signin mode, reject numbers not in the DB
+    if (mode === 'signin') {
+      const existing = await UserModel.findByPhone(phone);
+      if (!existing) {
+        throw new AppError('No account found with this number. Please sign up first.', 404, 'USER_NOT_FOUND');
+      }
+    }
     const rateKey = `${OTP_RATE_PREFIX}${phone}`;
     const attempts = await redis.incr(rateKey);
 
